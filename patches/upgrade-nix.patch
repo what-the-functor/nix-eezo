@@ -1,0 +1,61 @@
+--- a/bin/eezo
++++ b/bin/eezo
+@@ -27,8 +27,8 @@
+   eezo deploy           ship it: build, deploy to Fly.io, migrate, wait for health
+       --fly             the Fly.io target (the default; long form: --target fly)
+       --app <name>      Fly app name (first deploy; required when non-interactive)
+-  eezo upgrade          move to the latest eezo on Maven Central: this command, what
+-                        `new` scaffolds, and the project in the current directory
++  eezo upgrade          move the project in the current directory to the eezo release
++                        installed by Nix; the command line itself moves with `nix flake update`
+ 
+ forwarded to the application (run from the project directory):
+   eezo routes           what is mounted
+@@ -442,33 +442,30 @@
+ }
+ 
+ # ---------------------------------------------------------------------------------------------
+-# upgrade — the installer again, which asks Maven Central for the latest release, records it and
+-# replaces this script; then the project in the current directory, if there is one, is moved to
+-# that release. The installer swaps the script in with a rename, so the bash reading this file
+-# keeps the old inode and finishes cleanly.
++# upgrade — Nix variant. The command line lives in the Nix store and moves only with the flake
++# that provides it, so this does not run the installer. It moves the project in the current
++# directory, if there is one, to the release Nix installed (the one `new` scaffolds), and says how
++# to move the command line itself.
+ # ---------------------------------------------------------------------------------------------
+ 
+-EEZO_SITE="${EEZO_SITE:-https://eezo.io}"
+-
+ upgrade() {
+   if [ -f "$ROOT/.eezo-version" ]; then
+     echo "eezo: this launcher runs from a checkout of the repository, and its version is whatever" >&2
+     echo "\`sbt publishLocalForExample\` published last. Run that at $ROOT to move it." >&2
+     exit 1
+   fi
+-  local before after
+-  before="$(grep '^version=' "${EEZO_HOME:-$HOME/.eezo}/eezo-version" 2> /dev/null | cut -d= -f2-)"
+-  curl -fsSL "$EEZO_SITE/install" | bash
+-  after="$(grep '^version=' "${EEZO_HOME:-$HOME/.eezo}/eezo-version" | cut -d= -f2-)"
+-  [ -n "$after" ] || { echo "eezo: the installer recorded no version" >&2; exit 1; }
++  local version
++  version="$(grep '^version=' "${EEZO_HOME:-$HOME/.eezo}/eezo-version" 2> /dev/null | cut -d= -f2-)"
++  [ -n "$version" ] || { echo "eezo: no version recorded in ${EEZO_HOME:-$HOME/.eezo}/eezo-version" >&2; exit 1; }
+   if [ -f build.sbt ] && grep -q '"io.eezo"' build.sbt; then
+-    bump_project "$after"
++    bump_project "$version"
+   fi
+-  if [ "$before" = "$after" ]; then
+-    echo "eezo $after is the latest release; the command line is up to date."
+-  else
+-    echo "eezo ${before:-?} -> $after"
+-  fi
++  echo "eezo $version is the release Nix installed; this command does not upgrade the command line."
++  echo "To move to a newer release, update the flake that provides eezo, for example:"
++  echo
++  echo "    nix flake update <input>     # in the flake that has eezo as an input"
++  echo
++  echo "then run \`eezo upgrade\` again to move this project to it."
+ }
+ 
+ # Rewrites the version on every eezo dependency and on the sbt plugin line in the current
